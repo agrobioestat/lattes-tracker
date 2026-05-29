@@ -1,49 +1,35 @@
+import { google } from 'googleapis';
+
 export default async function handler(req, res) {
-    const { debug } = req.query;
-    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-    const clientIp = ip ? ip.split(',')[0].trim() : '';
-    
-    // Objeto para guardar o relatório do que está acontecendo
-    let relatorio = { passo: "Início", ipDetectado: clientIp };
-
     try {
-        relatorio.passo = "Buscando Geolocalização";
-        const geoRes = await fetch(`https://get.geojs.io/v1/ip/geo/${clientIp}.json`);
-        const data = await geoRes.json();
-        relatorio.dadosGeograficos = data;
-
-        const googleAppUrl = "https://script.google.com/macros/s/AKfycbwH431-diYqGIjmfAznIlERg6DrnZXy-Orwpl1c58SdvL6i0esZxckp_pIoozeuErZteg/exec";
-        
-        const params = new URLSearchParams({
-            ip: data.ip || clientIp,
-            cidade: data.city || "Desconhecido",
-            estado: data.region || "Desconhecido",
-            pais: data.country || "Desconhecido",
-            lat: data.latitude || "",
-            lon: data.longitude || "",
-            ua: req.headers['user-agent'] || "Desconhecido"
+        const auth = new google.auth.GoogleAuth({
+            credentials: JSON.parse(process.env.GOOGLE_CREDENTIALS),
+            scopes: ['https://www.googleapis.com/auth/spreadsheets'],
         });
 
-        relatorio.passo = "Enviando para o Google Sheets";
-        relatorio.urlEnviada = `${googleAppUrl}?${params.toString()}`;
+        const sheets = google.sheets({ version: 'v4', auth });
         
-        const googleRes = await fetch(relatorio.urlEnviada, { method: 'GET', redirect: 'follow' });
-        relatorio.statusRespostaGoogle = googleRes.status;
-        relatorio.passo = "Sucesso Total";
+        // Captura os dados do visitante
+        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'IP Oculto';
+        const dataHora = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+        const userAgent = req.headers['user-agent'] || 'Não identificado';
 
-    } catch (e) {
-        relatorio.passo = "Erro detectado";
-        relatorio.detalheDoErro = e.message;
+        // Envia para a planilha
+        await sheets.spreadsheets.values.append({
+            spreadsheetId: process.env.SPREADSHEET_ID,
+            range: 'Acessos!A:C',
+            valueInputOption: 'RAW',
+            requestBody: {
+                values: [[dataHora, ip, userAgent]],
+            },
+        });
+
+    } catch (error) {
+        console.error("Erro ao gravar na planilha:", error);
     }
 
-    // Se você digitar ?debug=true no navegador, ele mostra o relatório em texto
-    if (debug === "true") {
-        res.setHeader('Content-Type', 'application/json');
-        return res.status(200).json(relatorio);
-    }
-
-    // Caso contrário, manda um script invisível imitando o Clustrmaps
+    // Retorna o formato de script esperado pelo Lattes
     res.setHeader('Content-Type', 'application/javascript');
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    res.status(200).send("/* Tracker Lattes Ativado */");
+    res.status(200).send("/* Tracker Ativado */");
 }
