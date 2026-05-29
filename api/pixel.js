@@ -42,9 +42,8 @@ export default async function handler(req, res) {
         return res.status(200).json(relatorio);
     }
 
-    // Caso contrário, manda a imagem invisível padrão para o Lattes
-    const transparentGif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
-    res.setHeader('Content-Type', 'image/gif');
+    // Caso contrário, manda um script invisível imitando o Clustrmaps
+    res.setHeader('Content-Type', 'application/javascript');
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    res.status(200).send(transparentGif);
+    res.status(200).send("/* Tracker Lattes Ativado */");
 }
